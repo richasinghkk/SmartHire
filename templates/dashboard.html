@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard | SmartHire</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #ecfdf5, #eef2ff);
+        }
+
+        .navbar {
+            background: #0f172a;
+        }
+
+        .card {
+            border-radius: 16px;
+            border: none;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.08);
+            animation: fadeIn 0.6s ease-in-out;
+        }
+
+        .feature-btn {
+            font-weight: 600;
+        }
+
+        .summary-box {
+            border-radius: 14px;
+            padding: 16px;
+            background: #f8fafc;
+            box-shadow: inset 0 0 0 1px #e5e7eb;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-dark px-4">
+    <span class="navbar-brand fw-bold">SmartHire</span>
+    <a href="/logout" class="btn btn-outline-light btn-sm">Logout</a>
+</nav>
+
+<div class="container my-5">
+
+    <!-- UPLOAD CARD -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5>Upload Resumes</h5>
+
+            <form method="POST" enctype="multipart/form-data" id="uploadForm">
+                <input type="file" name="resumes" multiple class="form-control my-3" required>
+
+                <button class="btn btn-success" id="analyzeBtn">
+                    Analyze Resumes
+                </button>
+            </form>
+
+            <!-- LOADER -->
+            <div id="loading" class="text-center mt-4" style="display:none;">
+                <div class="spinner-border text-success"></div>
+                <p class="mt-2 text-muted">AI is analyzing resumes…</p>
+
+                <ul class="text-muted small mt-3 list-unstyled">
+                    <li>✔ Parsing resumes</li>
+                    <li>✔ Extracting skills</li>
+                    <li>✔ Matching with job description</li>
+                    <li>✔ Running bias audit</li>
+                    <li>✔ Generating recommendations</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    {% if results %}
+    <div id="results">
+
+        <h4 class="mb-3">Screened Candidates</h4>
+
+        {% for r in results %}
+        <div class="card mb-4">
+            <div class="card-body">
+
+                <!-- HEADER -->
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">{{ r.name }}</h6>
+                    <span class="badge bg-success fs-6">{{ r.score }}%</span>
+                </div>
+
+                <p class="text-muted mt-1">
+                    Experience: <strong>{{ r.experience }}</strong>
+                </p>
+
+                <!-- SUMMARY CARDS -->
+                <div class="row text-center mt-3">
+                    <div class="col-md-4">
+                        <div class="summary-box">
+                            <strong>Match Score</strong>
+                            <p class="text-success fs-5 mt-1">{{ r.score }}%</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="summary-box">
+                            <strong>Experience</strong>
+                            <p class="fs-6 mt-1">{{ r.experience }}</p>
+                        </div>
+                    </div>
+
+                    <div class="col-md-4">
+                        <div class="summary-box">
+                            <strong>Best Role</strong>
+                            <p class="fs-6 mt-1">{{ r.best_role }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FEATURE NAVIGATION -->
+                <div class="row g-2 mt-4">
+                    <div class="col-md-2">
+                        <a href="/skills/{{ r.name }}" class="btn btn-outline-success w-100 feature-btn">Skills</a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="/match/{{ r.name }}" class="btn btn-outline-success w-100 feature-btn">Match</a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="/bias/{{ r.name }}" class="btn btn-outline-success w-100 feature-btn">Bias</a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="/advice/{{ r.name }}" class="btn btn-outline-success w-100 feature-btn">Advice</a>
+                    </div>
+                    <div class="col-md-2">
+                        <a href="/role/{{ r.name }}" class="btn btn-outline-success w-100 feature-btn">Role</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+
+    </div>
+
+    <!-- AUTO SCROLL -->
+    <script>
+        document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+    </script>
+    {% endif %}
+
+</div>
+
+<!-- INTERACTIVITY SCRIPT -->
+<script>
+document.getElementById("uploadForm").addEventListener("submit", function () {
+    document.getElementById("loading").style.display = "block";
+    const btn = document.getElementById("analyzeBtn");
+    btn.innerText = "Analyzing...";
+    btn.disabled = true;
+});
+</script>
+
+</body>
+</html>

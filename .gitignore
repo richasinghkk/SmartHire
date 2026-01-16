@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+users.db
+data/resumes/
+data/reports/
+.env

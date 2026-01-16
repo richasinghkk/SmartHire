@@ -1,0 +1,3 @@
+We are looking for a Data Analyst with strong knowledge of Python, SQL,
+Machine Learning, Data Analysis, and data visualization tools.
+Experience with statistics and problem solving is a plus.
