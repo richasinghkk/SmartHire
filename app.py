@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, send_file
+from flask import Flask, render_template, request, redirect, url_for, session
 import os
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -14,19 +14,32 @@ from models.resume_advisor import generate_resume_advice
 from models.role_optimizer import optimize_roles
 from models.analytics import generate_recruiter_analytics
 
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-
 # ---------------- APP CONFIG ----------------
 app = Flask(__name__)
 app.secret_key = "smarthire_secret_key"
 
 UPLOAD_FOLDER = "data/resumes"
 JD_PATH = "data/job_descriptions/jd.txt"
-REPORT_FOLDER = "data/reports"
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(REPORT_FOLDER, exist_ok=True)
+
+# ---------------- DATABASE INIT (CRITICAL FIX) ----------------
+def init_db():
+    conn = sqlite3.connect("users.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# CREATE DB ON STARTUP
+init_db()
 
 # ---------------- LANDING PAGE ----------------
 @app.route("/")
@@ -53,8 +66,12 @@ def register():
             conn.commit()
             conn.close()
             return redirect(url_for("login"))
-        except:
-            return render_template("register.html", error="User already exists")
+
+        except sqlite3.IntegrityError:
+            return render_template(
+                "register.html",
+                error="Email already registered"
+            )
 
     return render_template("register.html")
 
@@ -93,7 +110,6 @@ def dashboard():
         return redirect(url_for("login"))
 
     results = []
-    analytics = None
 
     if request.method == "POST":
         files = request.files.getlist("resumes")
@@ -114,7 +130,7 @@ def dashboard():
             matched, missing = explain_match(cleaned_text, jd_text)
             experience = classify_experience(cleaned_text)
             advice = generate_resume_advice(missing, experience)
-            role_scores, best_role = optimize_roles(cleaned_text)
+            _, best_role = optimize_roles(cleaned_text)
 
             results.append({
                 "name": file.filename,
@@ -129,12 +145,10 @@ def dashboard():
             })
 
         results = sorted(results, key=lambda x: x["score"], reverse=True)
-        analytics = generate_recruiter_analytics(results)
 
     return render_template(
         "dashboard.html",
         results=results,
-        analytics=analytics,
         user=session["user_name"]
     )
 
@@ -190,11 +204,7 @@ def role_page(name):
     role_scores, best_role = optimize_roles(cleaned)
     return render_template("role.html", name=name, role_scores=role_scores, best_role=best_role)
 
-# ---------------- RUN ----------------
-# if __name__ == "__main__":
-#     app.run(debug=True)
-
+# ---------------- RUN (RENDER SAFE) ----------------
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
