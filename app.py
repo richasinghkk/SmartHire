@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session
 import os
-import mysql.connector
+import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from resume_parser.parser import parse_resume
@@ -15,22 +15,32 @@ from models.role_optimizer import optimize_roles
 
 # ---------------- APP CONFIG ----------------
 app = Flask(__name__)
-app.secret_key = "smarthire_secret_key"   # for sessions
+app.secret_key = "smarthire_secret_key"
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "users.db")
 
 UPLOAD_FOLDER = "data/resumes"
 JD_PATH = "data/job_descriptions/jd.txt"
+
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ---------------- MYSQL CONFIG ----------------
-MYSQL_CONFIG = {
-    "host": "localhost",
-    "user": "root",
-    "password": "1014",
-    "database": "smarthire"
-}
+# ---------------- DATABASE INIT ----------------
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+    conn.close()
 
-def get_db_connection():
-    return mysql.connector.connect(**MYSQL_CONFIG)
+init_db()
 
 # ---------------- LANDING ----------------
 @app.route("/")
@@ -51,18 +61,17 @@ def register():
         hashed_password = generate_password_hash(password)
 
         try:
-            conn = get_db_connection()
+            conn = sqlite3.connect(DB_PATH)
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
+                "INSERT INTO users (name, email, password) VALUES (?, ?, ?)",
                 (name, email, hashed_password)
             )
             conn.commit()
-            cursor.close()
             conn.close()
             return redirect(url_for("login"))
 
-        except mysql.connector.IntegrityError:
+        except sqlite3.IntegrityError:
             return render_template("register.html", error="Email already exists")
 
     return render_template("register.html")
@@ -74,11 +83,10 @@ def login():
         email = request.form.get("email")
         password = request.form.get("password")
 
-        conn = get_db_connection()
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT * FROM users WHERE email = ?", (email,))
         user = cursor.fetchone()
-        cursor.close()
         conn.close()
 
         if user and check_password_hash(user[3], password):
@@ -183,8 +191,6 @@ def role_page(name):
     return render_template("role.html", name=name, role_scores=role_scores, best_role=best_role)
 
 # ---------------- RUN ----------------
-# if __name__ == "__main__":
-#     app.run(debug=True)
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
