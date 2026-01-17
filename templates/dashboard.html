@@ -62,8 +62,7 @@
 
             <form method="POST" enctype="multipart/form-data" id="uploadForm">
                 <input type="file" name="resumes" multiple class="form-control my-3" required>
-
-                <button class="btn btn-success" id="analyzeBtn">
+                <button type="submit" class="btn btn-success" id="analyzeBtn">
                     Analyze Resumes
                 </button>
             </form>
@@ -81,10 +80,14 @@
                     <li>✔ Generating recommendations</li>
                 </ul>
             </div>
+
+            {% if error %}
+                <div class="alert alert-danger mt-3">{{ error }}</div>
+            {% endif %}
         </div>
     </div>
 
-    {% if results %}
+    {% if results and results|length > 0 %}
     <div id="results">
 
         <h4 class="mb-3">Screened Candidates</h4>
@@ -103,7 +106,7 @@
                     Experience: <strong>{{ r.experience }}</strong>
                 </p>
 
-                <!-- SUMMARY CARDS -->
+                <!-- SUMMARY -->
                 <div class="row text-center mt-3">
                     <div class="col-md-4">
                         <div class="summary-box">
@@ -127,7 +130,7 @@
                     </div>
                 </div>
 
-                <!-- FEATURE NAVIGATION -->
+                <!-- FEATURES -->
                 <div class="row g-2 mt-4">
                     <div class="col-md-2">
                         <a href="/skills/{{ r.name }}" class="btn btn-outline-success w-100 feature-btn">Skills</a>
@@ -151,23 +154,21 @@
         {% endfor %}
 
     </div>
-
-    <!-- AUTO SCROLL -->
-    <script>
-        document.getElementById("results").scrollIntoView({ behavior: "smooth" });
-    </script>
     {% endif %}
 
 </div>
 
-<!-- INTERACTIVITY SCRIPT -->
+<!-- SAFE JS -->
 <script>
-document.getElementById("uploadForm").addEventListener("submit", function () {
-    document.getElementById("loading").style.display = "block";
-    const btn = document.getElementById("analyzeBtn");
-    btn.innerText = "Analyzing...";
-    btn.disabled = true;
-});
+const form = document.getElementById("uploadForm");
+if (form) {
+    form.addEventListener("submit", function () {
+        document.getElementById("loading").style.display = "block";
+        const btn = document.getElementById("analyzeBtn");
+        btn.innerText = "Analyzing...";
+        btn.disabled = true;
+    });
+}
 </script>
 
 </body>
