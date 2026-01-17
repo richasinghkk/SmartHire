@@ -2,12 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, session
 import os
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-
-# ----------- NLTK FIX (CRITICAL) -----------
-import nltk
-nltk.download("punkt")
-nltk.download("stopwords")
-nltk.download("wordnet")
+from werkzeug.utils import secure_filename
 
 from resume_parser.parser import parse_resume
 from preprocessing.text_cleaner import clean_text
@@ -24,10 +19,12 @@ app = Flask(__name__)
 app.secret_key = "smarthire_secret_key"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 DB_PATH = os.path.join(BASE_DIR, "users.db")
+
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "data", "resumes")
 JD_PATH = os.path.join(BASE_DIR, "data", "job_descriptions", "jd.txt")
+
+ALLOWED_EXTENSIONS = {"pdf", "docx"}
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -47,6 +44,10 @@ def init_db():
     conn.close()
 
 init_db()
+
+# ---------------- HELPERS ----------------
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # ---------------- LANDING ----------------
 @app.route("/")
@@ -76,7 +77,6 @@ def register():
             conn.commit()
             conn.close()
             return redirect(url_for("login"))
-
         except sqlite3.IntegrityError:
             return render_template("register.html", error="Email already exists")
 
@@ -110,7 +110,7 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# ---------------- DASHBOARD (FIXED) ----------------
+# ---------------- DASHBOARD ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if "user_id" not in session:
@@ -119,17 +119,33 @@ def dashboard():
     results = []
 
     if request.method == "POST":
-        try:
-            files = request.files.getlist("resumes")
+        files = request.files.getlist("resumes")
 
-            with open(JD_PATH, "r", encoding="utf-8") as f:
-                jd_text = f.read()
+        if not files:
+            return render_template(
+                "dashboard.html",
+                results=[],
+                user=session["user_name"],
+                error="No files uploaded"
+            )
 
-            for file in files:
-                filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-                file.save(filepath)
+        with open(JD_PATH, "r", encoding="utf-8") as f:
+            jd_text = f.read()
 
+        for file in files:
+            if file.filename == "" or not allowed_file(file.filename):
+                continue
+
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+
+            try:
                 raw_text = parse_resume(filepath)
+
+                if not raw_text.strip():
+                    continue
+
                 cleaned_text = clean_text(raw_text)
 
                 skills = extract_skills(cleaned_text)
@@ -140,7 +156,7 @@ def dashboard():
                 _, best_role = optimize_roles(cleaned_text)
 
                 results.append({
-                    "name": file.filename,
+                    "name": filename,
                     "score": score,
                     "skills": skills,
                     "experience": experience,
@@ -150,56 +166,16 @@ def dashboard():
                     "best_role": best_role
                 })
 
-            results = sorted(results, key=lambda x: x["score"], reverse=True)
+            except Exception as e:
+                print("❌ Resume error:", e)
 
-        except Exception as e:
-            print("🔥 DASHBOARD ERROR:", e)
-            return "Resume analysis failed. Check logs."
+        results.sort(key=lambda x: x["score"], reverse=True)
 
     return render_template(
         "dashboard.html",
         results=results,
         user=session["user_name"]
     )
-
-# ---------------- FEATURE PAGES ----------------
-@app.route("/skills/<name>")
-def skills_page(name):
-    raw = parse_resume(os.path.join(UPLOAD_FOLDER, name))
-    skills = extract_skills(clean_text(raw))
-    return render_template("skills.html", name=name, skills=skills)
-
-@app.route("/match/<name>")
-def match_page(name):
-    raw = parse_resume(os.path.join(UPLOAD_FOLDER, name))
-    cleaned = clean_text(raw)
-    with open(JD_PATH, "r", encoding="utf-8") as f:
-        jd_text = f.read()
-    matched, missing = explain_match(cleaned, jd_text)
-    return render_template("match.html", name=name, matched=matched, missing=missing)
-
-@app.route("/bias/<name>")
-def bias_page(name):
-    raw = parse_resume(os.path.join(UPLOAD_FOLDER, name))
-    bias_report = generate_bias_audit(raw)
-    return render_template("bias.html", name=name, bias=bias_report)
-
-@app.route("/advice/<name>")
-def advice_page(name):
-    raw = parse_resume(os.path.join(UPLOAD_FOLDER, name))
-    cleaned = clean_text(raw)
-    with open(JD_PATH, "r", encoding="utf-8") as f:
-        jd_text = f.read()
-    _, missing = explain_match(cleaned, jd_text)
-    advice = generate_resume_advice(missing, classify_experience(cleaned))
-    return render_template("advice.html", name=name, advice=advice)
-
-@app.route("/role/<name>")
-def role_page(name):
-    raw = parse_resume(os.path.join(UPLOAD_FOLDER, name))
-    cleaned = clean_text(raw)
-    role_scores, best_role = optimize_roles(cleaned)
-    return render_template("role.html", name=name, role_scores=role_scores, best_role=best_role)
 
 # ---------------- RUN ----------------
 if __name__ == "__main__":
