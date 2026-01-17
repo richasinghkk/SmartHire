@@ -3,6 +3,12 @@ import os
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# ----------- NLTK FIX (CRITICAL) -----------
+import nltk
+nltk.download("punkt")
+nltk.download("stopwords")
+nltk.download("wordnet")
+
 from resume_parser.parser import parse_resume
 from preprocessing.text_cleaner import clean_text
 from utils.helpers import extract_skills
@@ -18,10 +24,10 @@ app = Flask(__name__)
 app.secret_key = "smarthire_secret_key"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "users.db")
 
-UPLOAD_FOLDER = "data/resumes"
-JD_PATH = "data/job_descriptions/jd.txt"
+DB_PATH = os.path.join(BASE_DIR, "users.db")
+UPLOAD_FOLDER = os.path.join(BASE_DIR, "data", "resumes")
+JD_PATH = os.path.join(BASE_DIR, "data", "job_descriptions", "jd.txt")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -104,7 +110,7 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# ---------------- DASHBOARD ----------------
+# ---------------- DASHBOARD (FIXED) ----------------
 @app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if "user_id" not in session:
@@ -113,37 +119,42 @@ def dashboard():
     results = []
 
     if request.method == "POST":
-        files = request.files.getlist("resumes")
+        try:
+            files = request.files.getlist("resumes")
 
-        with open(JD_PATH, "r", encoding="utf-8") as f:
-            jd_text = f.read()
+            with open(JD_PATH, "r", encoding="utf-8") as f:
+                jd_text = f.read()
 
-        for file in files:
-            filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-            file.save(filepath)
+            for file in files:
+                filepath = os.path.join(UPLOAD_FOLDER, file.filename)
+                file.save(filepath)
 
-            raw_text = parse_resume(filepath)
-            cleaned_text = clean_text(raw_text)
+                raw_text = parse_resume(filepath)
+                cleaned_text = clean_text(raw_text)
 
-            skills = extract_skills(cleaned_text)
-            score = match_resume_with_jd(cleaned_text, jd_text)
-            matched, missing = explain_match(cleaned_text, jd_text)
-            experience = classify_experience(cleaned_text)
-            advice = generate_resume_advice(missing, experience)
-            _, best_role = optimize_roles(cleaned_text)
+                skills = extract_skills(cleaned_text)
+                score = match_resume_with_jd(cleaned_text, jd_text)
+                matched, missing = explain_match(cleaned_text, jd_text)
+                experience = classify_experience(cleaned_text)
+                advice = generate_resume_advice(missing, experience)
+                _, best_role = optimize_roles(cleaned_text)
 
-            results.append({
-                "name": file.filename,
-                "score": score,
-                "skills": skills,
-                "experience": experience,
-                "matched": matched,
-                "missing": missing,
-                "advice": advice,
-                "best_role": best_role
-            })
+                results.append({
+                    "name": file.filename,
+                    "score": score,
+                    "skills": skills,
+                    "experience": experience,
+                    "matched": matched,
+                    "missing": missing,
+                    "advice": advice,
+                    "best_role": best_role
+                })
 
-        results = sorted(results, key=lambda x: x["score"], reverse=True)
+            results = sorted(results, key=lambda x: x["score"], reverse=True)
+
+        except Exception as e:
+            print("🔥 DASHBOARD ERROR:", e)
+            return "Resume analysis failed. Check logs."
 
     return render_template(
         "dashboard.html",
