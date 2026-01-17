@@ -7,3 +7,5 @@ python-docx
 matplotlib
 werkzeug
 reportlab
+mysql-connector-python
+
